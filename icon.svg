@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#1f7a63"/>
+  <rect x="78" y="98" width="356" height="314" rx="36" fill="#f5f7f4"/>
+  <path d="M136 176h244M136 246h244M136 316h148" stroke="#1f7a63" stroke-width="34" stroke-linecap="round"/>
+  <circle cx="350" cy="318" r="34" fill="#2f6f9f"/>
+  <text x="256" y="456" text-anchor="middle" font-family="Arial, sans-serif" font-size="54" font-weight="700" fill="#f5f7f4">HB</text>
+</svg>

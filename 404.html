@@ -1,0 +1,739 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#1f7a63" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Hamma Busness" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <title>نظام المبيعات والمخزون</title>
+    <link rel="stylesheet" href="./styles.css?v=20260607" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./icon.svg" />
+  </head>
+  <body class="locked">
+    <section class="login-screen" id="loginScreen">
+      <form class="login-box" id="loginForm">
+        <span class="brand-mark">HB</span>
+        <h1>Hamma Busness</h1>
+        <p>أدخل بيانات الدخول لتشغيل التطبيق.</p>
+        <label>
+          اسم المستخدم
+          <input name="username" autocomplete="username" required placeholder="admin" />
+        </label>
+        <label>
+          كلمة المرور
+          <input name="password" type="password" autocomplete="current-password" required placeholder="••••••" />
+        </label>
+        <button class="primary-action full" type="submit">دخول</button>
+        <div class="login-error" id="loginError"></div>
+      </form>
+    </section>
+
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="التنقل الرئيسي">
+        <div class="brand">
+          <span class="brand-mark">POS</span>
+          <div>
+            <strong id="brandName">Hamma Busness</strong>
+            <span>مبيعات ومخزون</span>
+          </div>
+        </div>
+
+        <nav class="nav-list">
+          <button class="nav-item active" data-view="dashboard" type="button">
+            <span class="icon" data-icon="layout"></span>
+            الرئيسية
+          </button>
+          <button class="nav-item" data-view="new-product" type="button">
+            <span class="icon" data-icon="plus-box"></span>
+            إضافة صنف
+          </button>
+          <button class="nav-item" data-view="inventory" type="button">
+            <span class="icon" data-icon="boxes"></span>
+            إدارة المخزون
+          </button>
+          <button class="nav-item" data-view="pos" type="button">
+            <span class="icon" data-icon="scan"></span>
+            المبيعات POS
+          </button>
+          <button class="nav-item" data-view="suppliers" type="button">
+            <span class="icon" data-icon="truck"></span>
+            الموردون
+          </button>
+          <button class="nav-item" data-view="customers" type="button">
+            <span class="icon" data-icon="users"></span>
+            العملاء
+          </button>
+          <button class="nav-item" data-view="capital" type="button">
+            <span class="icon" data-icon="coins"></span>
+            رأس المال
+          </button>
+          <button class="nav-item" data-view="reports" type="button">
+            <span class="icon" data-icon="chart"></span>
+            التقارير
+          </button>
+          <button class="nav-item" data-view="settings" type="button">
+            <span class="icon" data-icon="settings"></span>
+            الإعدادات
+          </button>
+        </nav>
+
+        <div class="stock-warning">
+          <span class="icon" data-icon="bell"></span>
+          <div>
+            <strong>تنبيه إعادة الطلب</strong>
+            <span id="sidebarLowStock">0 أصناف تحتاج متابعة</span>
+          </div>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">لوحة تشغيل يومية</p>
+            <h1 id="pageTitle">الرئيسية</h1>
+          </div>
+          <div class="top-actions">
+            <label class="search-field">
+              <span class="icon" data-icon="search"></span>
+              <input id="globalSearch" type="search" placeholder="بحث سريع عن منتج أو مورد" />
+            </label>
+            <button class="primary-action" id="quickSaleBtn" type="button">
+              <span class="icon" data-icon="scan"></span>
+              بيع سريع
+            </button>
+            <button class="ghost-action" id="exportExcelBtn" type="button">
+              <span class="icon" data-icon="download"></span>
+              ملف Excel
+            </button>
+            <button class="ghost-action" id="printSectionBtn" type="button">
+              <span class="icon" data-icon="printer"></span>
+              طباعة
+            </button>
+          </div>
+        </header>
+
+        <section class="view active" id="dashboard">
+          <div class="metric-grid">
+            <article class="metric">
+              <span class="metric-icon mint"><span class="icon" data-icon="wallet"></span></span>
+              <div>
+                <span>مبيعات اليوم</span>
+                <strong id="todaySales">0</strong>
+              </div>
+            </article>
+            <article class="metric">
+              <span class="metric-icon blue"><span class="icon" data-icon="boxes"></span></span>
+              <div>
+                <span>قيمة المخزون</span>
+                <strong id="inventoryValue">0</strong>
+              </div>
+            </article>
+            <article class="metric">
+              <span class="metric-icon amber"><span class="icon" data-icon="bell"></span></span>
+              <div>
+                <span>نقص المخزون</span>
+                <strong id="lowStockCount">0</strong>
+              </div>
+            </article>
+            <article class="metric">
+              <span class="metric-icon rose"><span class="icon" data-icon="clock"></span></span>
+              <div>
+                <span>مبيعات آخر 7 أيام</span>
+                <strong id="weekSales">0</strong>
+              </div>
+            </article>
+          </div>
+
+          <div class="dashboard-grid">
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <h2>عرض سريع للمخزون</h2>
+                  <p>الأصناف الأكثر أهمية للتشغيل اليومي</p>
+                </div>
+                <button class="ghost-action" data-view-jump="inventory" type="button">عرض الكل</button>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>الصنف</th>
+                      <th>النوع</th>
+                      <th>المتوفر</th>
+                      <th>الحالة</th>
+                    </tr>
+                  </thead>
+                  <tbody id="stockPreview"></tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <h2>أكثر خمس أصناف مبيعاً</h2>
+                  <p>حسب الكمية خلال الفترة الحالية</p>
+                </div>
+              </div>
+              <div class="top-products" id="topProducts"></div>
+            </section>
+
+            <section class="panel wide">
+              <div class="panel-head">
+                <div>
+                  <h2>إشعارات نقص المخزون</h2>
+                  <p>الأصناف التي وصلت إلى حد إعادة الطلب</p>
+                </div>
+              </div>
+              <div class="alert-list" id="lowStockAlerts"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="new-product">
+          <section class="form-panel">
+            <div class="panel-head">
+              <div>
+                <h2>إضافة صنف جديد</h2>
+                <p>أدخل بيانات المنتج الأساسية ليظهر في المخزون وشاشة البيع.</p>
+              </div>
+            </div>
+            <form id="productForm" class="product-form">
+              <label>
+                اسم المنتج
+                <input name="name" required placeholder="مثال: قهوة مختصة 250 جم" />
+              </label>
+              <label>
+                السعر بالأوقية
+                <input name="price" required type="number" min="1" step="0.01" placeholder="350" />
+              </label>
+              <label>
+                الشركة المصنعة
+                <input name="maker" required placeholder="اسم الشركة" />
+              </label>
+              <label>
+                المورد
+                <select name="supplierId" id="productSupplier">
+                  <option value="">بدون مورد</option>
+                </select>
+              </label>
+              <label>
+                النوع
+                <select name="type" required>
+                  <option value="غذائيات">غذائيات</option>
+                  <option value="مشروبات">مشروبات</option>
+                  <option value="معلبات">معلبات</option>
+                  <option value="مخبوزات">مخبوزات</option>
+                  <option value="حلويات">حلويات</option>
+                  <option value="ألبان وأجبان">ألبان وأجبان</option>
+                  <option value="لحوم وأسماك">لحوم وأسماك</option>
+                  <option value="خضروات وفواكه">خضروات وفواكه</option>
+                  <option value="بهارات وتوابل">بهارات وتوابل</option>
+                  <option value="عناية">عناية</option>
+                  <option value="منزلية">منزلية</option>
+                  <option value="منظفات">منظفات</option>
+                  <option value="أدوات مكتبية">أدوات مكتبية</option>
+                  <option value="إلكترونيات">إلكترونيات</option>
+                  <option value="اكسسوارات">اكسسوارات</option>
+                  <option value="ملابس">ملابس</option>
+                  <option value="أحذية">أحذية</option>
+                  <option value="أدوية ومستلزمات صحية">أدوية ومستلزمات صحية</option>
+                  <option value="أدوات أطفال">أدوات أطفال</option>
+                  <option value="أدوات سيارات">أدوات سيارات</option>
+                  <option value="أخرى">أخرى</option>
+                </select>
+              </label>
+              <label>
+                الكمية الحالية
+                <input name="stock" required type="number" min="0" placeholder="60" />
+              </label>
+              <label>
+                حد إعادة الطلب
+                <input name="reorder" id="productReorder" type="number" min="0" placeholder="15" />
+              </label>
+              <div class="form-actions">
+                <button class="primary-action" type="submit">
+                  <span class="icon" data-icon="save"></span>
+                  حفظ الصنف
+                </button>
+                <button class="ghost-action" type="reset">تفريغ</button>
+              </div>
+            </form>
+          </section>
+        </section>
+
+        <section class="view" id="inventory">
+          <section class="panel">
+            <div class="panel-head inventory-head">
+              <div>
+                <h2>إدارة المخزون</h2>
+                <p>بحث، تصفية، تعديل، ومتابعة الأصناف التي تحتاج إعادة طلب.</p>
+              </div>
+              <button class="primary-action" data-view-jump="new-product" type="button">
+                <span class="icon" data-icon="plus"></span>
+                صنف جديد
+              </button>
+            </div>
+            <div class="filters">
+              <label class="search-field">
+                <span class="icon" data-icon="search"></span>
+                <input id="inventorySearch" type="search" placeholder="بحث باسم المنتج أو الباركود" />
+              </label>
+              <select id="typeFilter">
+                <option value="">كل الأنواع</option>
+                <option value="غذائيات">غذائيات</option>
+                <option value="مشروبات">مشروبات</option>
+                <option value="معلبات">معلبات</option>
+                <option value="مخبوزات">مخبوزات</option>
+                <option value="حلويات">حلويات</option>
+                <option value="ألبان وأجبان">ألبان وأجبان</option>
+                <option value="لحوم وأسماك">لحوم وأسماك</option>
+                <option value="خضروات وفواكه">خضروات وفواكه</option>
+                <option value="بهارات وتوابل">بهارات وتوابل</option>
+                <option value="عناية">عناية</option>
+                <option value="منزلية">منزلية</option>
+                <option value="منظفات">منظفات</option>
+                <option value="أدوات مكتبية">أدوات مكتبية</option>
+                <option value="إلكترونيات">إلكترونيات</option>
+                <option value="اكسسوارات">اكسسوارات</option>
+                <option value="ملابس">ملابس</option>
+                <option value="أحذية">أحذية</option>
+                <option value="أدوية ومستلزمات صحية">أدوية ومستلزمات صحية</option>
+                <option value="أدوات أطفال">أدوات أطفال</option>
+                <option value="أدوات سيارات">أدوات سيارات</option>
+                <option value="أخرى">أخرى</option>
+              </select>
+              <select id="dateFilter">
+                <option value="">كل التواريخ</option>
+                <option value="today">اليوم</option>
+                <option value="week">آخر أسبوع</option>
+                <option value="month">آخر شهر</option>
+              </select>
+              <select id="makerFilter">
+                <option value="">كل الشركات</option>
+              </select>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>الباركود</th>
+                <th>المنتج</th>
+                <th>الشركة</th>
+                <th>المورد</th>
+                <th>النوع</th>
+                    <th>السعر</th>
+                    <th>المخزون</th>
+                    <th>تعديل</th>
+                    <th>حذف</th>
+                  </tr>
+                </thead>
+                <tbody id="inventoryTable"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section class="view" id="pos">
+          <div class="pos-layout">
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <h2>شاشة المبيعات POS</h2>
+                  <p>ابحث بالباركود أو الاسم، ثم أضف الصنف للفاتورة.</p>
+                </div>
+              </div>
+              <label class="search-field sale-search">
+                <span class="icon" data-icon="scan"></span>
+                <input id="posSearch" type="search" placeholder="باركود أو بحث عن صنف" />
+              </label>
+              <select id="saleCustomer" class="sale-customer">
+                <option value="">عميل نقدي</option>
+              </select>
+              <select id="paymentType" class="sale-customer">
+                <option value="paid">تسديد كامل</option>
+                <option value="debt">دين على العميل</option>
+              </select>
+              <div class="product-picker" id="productPicker"></div>
+            </section>
+
+            <section class="panel invoice-panel">
+              <div class="panel-head">
+                <div>
+                  <h2>الفاتورة الحالية</h2>
+                  <p>الحساب يتم تلقائياً عند تغيير الكمية.</p>
+                </div>
+              </div>
+              <div class="invoice-lines" id="invoiceLines"></div>
+              <div class="invoice-summary">
+                <div><span>عدد الأصناف</span><strong id="invoiceCount">0</strong></div>
+                <div><span>الضريبة</span><strong id="invoiceTax">0</strong></div>
+                <div><span>الإجمالي</span><strong id="invoiceTotal">0</strong></div>
+              </div>
+              <button class="primary-action full" id="recordSaleBtn" type="button">
+                <span class="icon" data-icon="receipt"></span>
+                تسجيل العملية
+              </button>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="suppliers">
+          <div class="management-grid">
+            <section class="form-panel">
+              <div class="panel-head">
+                <div>
+                  <h2>إضافة مورد</h2>
+                  <p>اربط المورد بالأصناف لتظهر العلاقة في المخزون والتقارير.</p>
+                </div>
+              </div>
+              <form id="supplierForm" class="stack-form">
+                <label>
+                  اسم المورد
+                  <input name="name" required placeholder="اسم المورد" />
+                </label>
+                <label>
+                  رقم الهاتف
+                  <input name="contact" required placeholder="رقم الهاتف" />
+                </label>
+                <label>
+                  المنتج الذي يورده
+                  <input name="product" placeholder="مثال: مواد غذائية، مشروبات" />
+                </label>
+                <label>
+                  ملاحظات الطلبات
+                  <input name="orders" placeholder="مثال: طلب شهري أو حد أدنى للطلب" />
+                </label>
+                <button class="primary-action" type="submit">
+                  <span class="icon" data-icon="save"></span>
+                  حفظ المورد
+                </button>
+              </form>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <h2>الموردون</h2>
+                  <p>بيانات المورد، الأصناف المرتبطة به، وسجل الطلبات.</p>
+                </div>
+              </div>
+              <label class="search-field full-search">
+                <span class="icon" data-icon="search"></span>
+                <input id="supplierSearch" type="search" placeholder="بحث باسم المورد أو الهاتف" />
+              </label>
+              <div class="supplier-grid" id="supplierCards"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="customers">
+          <div class="management-grid">
+            <section class="form-panel">
+              <div class="panel-head">
+                <div>
+                  <h2>إضافة عميل</h2>
+                  <p>سجل بيانات العملاء للرجوع السريع أثناء البيع والمتابعة.</p>
+                </div>
+              </div>
+              <form id="customerForm" class="stack-form">
+                <label>
+                  اسم العميل
+                  <input name="name" required placeholder="اسم العميل" />
+                </label>
+                <label>
+                  رقم الهاتف
+                  <input name="phone" required placeholder="مثال: 2200 0000" />
+                </label>
+                <label>
+                  نوع العميل
+                  <select name="type">
+                    <option value="فرد">فرد</option>
+                    <option value="شركة">شركة</option>
+                    <option value="جملة">جملة</option>
+                  </select>
+                </label>
+                <label>
+                  ملاحظات
+                  <input name="notes" placeholder="ملاحظات مختصرة" />
+                </label>
+                <button class="primary-action" type="submit">
+                  <span class="icon" data-icon="save"></span>
+                  حفظ العميل
+                </button>
+              </form>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <h2>قائمة العملاء</h2>
+                  <p>بحث سريع وبيانات الاتصال الأساسية.</p>
+                </div>
+              </div>
+              <label class="search-field full-search">
+                <span class="icon" data-icon="search"></span>
+                <input id="customerSearch" type="search" placeholder="بحث باسم العميل أو الهاتف" />
+              </label>
+              <div class="entity-list" id="customerList"></div>
+            </section>
+            <section class="form-panel wide">
+              <div class="panel-head">
+                <div>
+                  <h2>تسديد ديون العملاء</h2>
+                  <p>سجل دفعة من العميل لتخفيض الدين المتبقي عليه.</p>
+                </div>
+              </div>
+              <form id="customerPaymentForm" class="product-form">
+                <label>
+                  العميل
+                  <select name="customerId" id="paymentCustomer" required>
+                    <option value="">اختر العميل</option>
+                  </select>
+                </label>
+                <label>
+                  مبلغ التسديد
+                  <input name="amount" required type="number" min="1" step="0.01" placeholder="0" />
+                </label>
+                <label>
+                  ملاحظة
+                  <input name="note" placeholder="مثال: تسديد نقدي" />
+                </label>
+                <div class="form-actions">
+                  <button class="primary-action" type="submit">
+                    <span class="icon" data-icon="save"></span>
+                    تسجيل التسديد
+                  </button>
+                </div>
+              </form>
+              <div class="entity-list payment-history" id="customerPaymentList"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="capital">
+          <div class="management-grid">
+            <section class="form-panel">
+              <div class="panel-head">
+                <div>
+                  <h2>تسجيل حركة رأس المال</h2>
+                  <p>أضف رأس مال، مصروفات، أو سحب لمتابعة صافي التشغيل.</p>
+                </div>
+              </div>
+              <form id="capitalForm" class="stack-form">
+                <label>
+                  نوع الحركة
+                  <select name="type">
+                    <option value="إيداع رأس مال">إيداع رأس مال</option>
+                    <option value="مصروف تشغيلي">مصروف تشغيلي</option>
+                    <option value="سحب">سحب</option>
+                  </select>
+                </label>
+                <label>
+                  المبلغ بالأوقية
+                  <input name="amount" required type="number" min="1" step="0.01" placeholder="0" />
+                </label>
+                <label>
+                  البيان
+                  <input name="note" required placeholder="مثال: شراء بضاعة أولية" />
+                </label>
+                <button class="primary-action" type="submit">
+                  <span class="icon" data-icon="save"></span>
+                  حفظ الحركة
+                </button>
+              </form>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <h2>ملخص رأس المال</h2>
+                  <p>إجمالي الإيداعات والمصروفات وصافي الرصيد.</p>
+                </div>
+              </div>
+              <div class="capital-summary" id="capitalSummary"></div>
+              <div class="entity-list" id="capitalList"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="reports">
+          <div class="reports-grid">
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <h2>مبيعات الفترات الزمنية</h2>
+                  <p>يومية، أسبوعية، وشهرية بالأوقية.</p>
+                </div>
+              </div>
+              <div class="period-list" id="periodReports"></div>
+            </section>
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <h2>المباع وغير المباع</h2>
+                  <p>مقارنة كمية البيع بالمخزون المتبقي حسب الفترة.</p>
+                </div>
+                <select id="reportPeriod">
+                  <option value="day">اليوم</option>
+                  <option value="week" selected>آخر أسبوع</option>
+                  <option value="month">آخر شهر</option>
+                </select>
+              </div>
+              <div class="sold-unsold-list" id="soldUnsoldReport"></div>
+            </section>
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <h2>ربحية الأصناف</h2>
+                  <p>تقدير الربح حسب المبيعات المسجلة.</p>
+                </div>
+              </div>
+              <div class="profit-list" id="profitReports"></div>
+            </section>
+            <section class="panel wide">
+              <div class="panel-head">
+                <div>
+                  <h2>المخزون المتبقي</h2>
+                  <p>نسبة المتوفر مقابل حد إعادة الطلب.</p>
+                </div>
+              </div>
+              <div class="remaining-stock" id="remainingStock"></div>
+            </section>
+            <section class="panel wide">
+              <div class="panel-head">
+                <div>
+                  <h2>ربط الجداول</h2>
+                  <p>علاقة الموردين بالأصناف والمبيعات المسجلة.</p>
+                </div>
+              </div>
+              <div class="entity-list" id="relationshipReport"></div>
+            </section>
+            <section class="panel wide">
+              <div class="panel-head">
+                <div>
+                  <h2>سجل عمليات البيع</h2>
+                  <p>آخر العمليات المسجلة مع الوقت والإجمالي.</p>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>رقم العملية</th>
+                      <th>التاريخ</th>
+                      <th>الوقت</th>
+                      <th>العميل</th>
+                      <th>الدفع</th>
+                      <th>الأصناف</th>
+                      <th>الإجمالي</th>
+                      <th>حذف</th>
+                    </tr>
+                  </thead>
+                  <tbody id="salesLogTable"></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="settings">
+          <div class="settings-grid">
+            <section class="form-panel">
+              <div class="panel-head">
+                <div>
+                  <h2>الإعدادات</h2>
+                  <p>إعدادات عامة لطريقة عرض التطبيق وحساب الفاتورة.</p>
+                </div>
+              </div>
+            <form id="settingsForm" class="product-form">
+                <label>
+                  اسم المتجر
+                  <input name="storeName" required placeholder="اسم المتجر" />
+                </label>
+                <label>
+                  العملة
+                  <input name="currency" required placeholder="أوقية" />
+                </label>
+                <label>
+                  نسبة الضريبة %
+                  <input name="taxRate" type="number" min="0" step="0.01" placeholder="0" />
+                </label>
+                <label>
+                  حد تنبيه افتراضي للمخزون
+                  <input name="defaultReorder" type="number" min="0" placeholder="10" />
+                </label>
+                <label>
+                  رقم الهاتف
+                  <input name="storePhone" placeholder="رقم المتجر" />
+                </label>
+                <label>
+                  العنوان
+                  <input name="storeAddress" placeholder="عنوان المتجر" />
+                </label>
+                <label>
+                  اسم مستخدم الدخول
+                  <input name="loginUsername" required placeholder="admin" />
+                </label>
+                <label>
+                  كلمة مرور الدخول
+                  <input name="loginPassword" type="password" required placeholder="1234" />
+                </label>
+                <div class="form-actions">
+                  <button class="primary-action" type="submit">
+                    <span class="icon" data-icon="save"></span>
+                    حفظ الإعدادات
+                  </button>
+                  <button class="ghost-action" id="logoutBtn" type="button">تسجيل الخروج</button>
+                  <button class="ghost-action danger-action" id="resetDataBtn" type="button">تصفير البيانات</button>
+                </div>
+              </form>
+            </section>
+
+            <section class="form-panel">
+              <div class="panel-head">
+                <div>
+                  <h2>ربط GitHub السحابي</h2>
+                  <p>حفظ واسترجاع بيانات التطبيق عبر Gist خاص في حساب GitHub.</p>
+                </div>
+              </div>
+              <form id="githubSyncForm" class="stack-form">
+                <label>
+                  GitHub Token
+                  <input name="githubToken" type="password" autocomplete="off" placeholder="ghp_ أو fine-grained token" />
+                </label>
+                <label>
+                  Gist ID
+                  <input name="githubGistId" placeholder="اتركه فارغاً لإنشاء Gist جديد عند أول رفع" />
+                </label>
+                <div class="form-actions wrap-actions">
+                  <button class="primary-action" type="submit">
+                    <span class="icon" data-icon="save"></span>
+                    حفظ الربط
+                  </button>
+                  <button class="ghost-action" id="pushGithubBtn" type="button">رفع البيانات</button>
+                  <button class="ghost-action" id="pullGithubBtn" type="button">استيراد البيانات</button>
+                </div>
+                <div class="sync-status" id="githubSyncStatus">لم يتم ربط GitHub بعد.</div>
+              </form>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="./app.js?v=20260607"></script>
+    <script>
+      if ("serviceWorker" in navigator && location.protocol !== "file:") {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker.register("./sw.js").catch(() => {});
+        });
+      }
+    </script>
+  </body>
+</html>
