@@ -229,6 +229,86 @@ function customerDebt(customerId) {
   return Math.max(0, debtSales - payments);
 }
 
+function normalizePartner(partner) {
+  return {
+    productShares: [],
+    share: 0,
+    ...partner,
+    productShares: Array.isArray(partner.productShares) ? partner.productShares : []
+  };
+}
+
+function partnerShareForProduct(partner, productId) {
+  const specific = (partner.productShares || []).find((entry) => Number(entry.productId) === Number(productId));
+  return Number(specific?.share ?? partner.share ?? 0);
+}
+
+function totalDefaultPartnerShare(nextPartnerId = null, nextShare = null) {
+  return partners.reduce((sum, partner) => {
+    const share = Number(nextPartnerId !== null && Number(partner.id) === Number(nextPartnerId) ? nextShare : partner.share || 0);
+    return sum + share;
+  }, 0);
+}
+
+function totalProductPartnerShare(productId, override = null) {
+  return partners.reduce((sum, partner) => {
+    const share = override && Number(override.partnerId) === Number(partner.id)
+      ? Number(override.share || 0)
+      : partnerShareForProduct(partner, productId);
+    return sum + share;
+  }, 0);
+}
+
+function totalProductShareWithDefault(productId, partnerId, share) {
+  return partners.reduce((sum, partner) => {
+    const hasSpecific = (partner.productShares || []).some((entry) => Number(entry.productId) === Number(productId));
+    if (Number(partner.id) === Number(partnerId) && !hasSpecific) return sum + Number(share || 0);
+    return sum + partnerShareForProduct(partner, productId);
+  }, 0);
+}
+
+function productName(productId) {
+  return products.find((product) => Number(product.id) === Number(productId))?.name || "صنف محذوف";
+}
+
+function partnerShareRows(period = "month") {
+  return salesLog
+    .filter((sale) => isWithinPeriod(sale.date, period))
+    .flatMap((sale) => (sale.partnerShares || []).map((share) => ({ sale, share })));
+}
+
+function partnerTotals(period = "month") {
+  return partnerShareRows(period).reduce((totals, row) => {
+    const key = row.share.partnerId || row.share.partnerName;
+    if (!totals[key]) totals[key] = { name: row.share.partnerName || "شريك محذوف", total: 0 };
+    totals[key].total += Number(row.share.amount || 0);
+    return totals;
+  }, {});
+}
+
+function calculatePartnerSharesForInvoice(lines) {
+  return lines.flatMap((line) => {
+    const itemProfit = Math.max(0, (Number(line.product.price || 0) - Number(line.product.cost || 0)) * line.qty);
+    return partners
+      .map((partner) => {
+        const sharePercent = partnerShareForProduct(partner, line.product.id);
+        if (!sharePercent) return null;
+        const amount = itemProfit * (sharePercent / 100);
+        return {
+          partnerId: partner.id,
+          partnerName: partner.name,
+          productId: line.product.id,
+          productName: line.product.name,
+          basisProfit: itemProfit,
+          sharePercent,
+          amount,
+          formula: `${itemProfit} * ${sharePercent}%`
+        };
+      })
+      .filter(Boolean);
+  });
+}
+
 function renderCustomerOptions() {
   const saleCustomer = document.getElementById("saleCustomer");
   const paymentCustomer = document.getElementById("paymentCustomer");
@@ -247,6 +327,22 @@ function renderCustomerOptions() {
     paymentCustomer.innerHTML = '<option value="">اختر العميل</option>' + options;
     paymentCustomer.value = selectedPaymentCustomer;
   }
+}
+
+function renderPartnerShareOptions() {
+  const partnerSelect = document.getElementById("sharePartnerSelect");
+  const productSelect = document.getElementById("shareProductSelect");
+  if (!partnerSelect || !productSelect) return;
+  const selectedPartner = partnerSelect.value;
+  const selectedProduct = productSelect.value;
+  partnerSelect.innerHTML = '<option value="">اختر الشريك</option>' + partners
+    .map((partner) => `<option value="${partner.id}">${partner.name} - ${fmt.format(Number(partner.share || 0))}%</option>`)
+    .join("");
+  productSelect.innerHTML = '<option value="">اختر الصنف</option>' + products
+    .map((product) => `<option value="${product.id}">${product.name}</option>`)
+    .join("");
+  partnerSelect.value = selectedPartner;
+  productSelect.value = selectedProduct;
 }
 
 function showToast(message) {
@@ -327,6 +423,29 @@ function sectionExportData(viewId) {
     line.product.price,
     line.qty * line.product.price
   ]);
+  const reportRows = salesLog.flatMap((sale) => {
+    const itemText = sale.items.map((item) => `${item.productName || productName(item.productId)} (${item.qty})`).join("، ");
+    const shares = sale.partnerShares || [];
+    if (!shares.length) {
+      return [[`#${sale.id}`, sale.date, sale.time, sale.customerName || "عميل نقدي", sale.paymentType === "debt" ? "دين" : "تسديد", itemText, sale.total, sale.grossProfit || "", "", "", "", "", "", ""]];
+    }
+    return shares.map((share) => [
+      `#${sale.id}`,
+      sale.date,
+      sale.time,
+      sale.customerName || "عميل نقدي",
+      sale.paymentType === "debt" ? "دين" : "تسديد",
+      itemText,
+      sale.total,
+      sale.grossProfit || 0,
+      share.partnerName || "شريك محذوف",
+      share.productName || productName(share.productId),
+      share.basisProfit,
+      `${share.sharePercent}%`,
+      share.amount,
+      share.formula
+    ]);
+  });
 
   const exports = {
     dashboard: {
@@ -390,6 +509,18 @@ function sectionExportData(viewId) {
         ["العنوان", settings.storeAddress]
       ]
     }
+  };
+
+  exports.partners = {
+    headers: ["الشريك", "الهاتف", "النسبة العامة", "رأس المال", "النسب الخاصة بالاصناف", "ملاحظات"],
+    rows: partners.map((partner) => {
+      const productShareText = (partner.productShares || []).map((entry) => `${productName(entry.productId)}: ${entry.share}%`).join("، ");
+      return [partner.name, partner.phone, partner.share, partner.capital, productShareText, partner.notes];
+    })
+  };
+  exports.reports = {
+    headers: ["رقم العملية", "التاريخ", "الوقت", "العميل", "الدفع", "الأصناف", "إجمالي المبيعات", "إجمالي الربح", "الشريك", "الصنف", "أساس الاحتساب", "النسبة", "حصة الشريك", "المعادلة"],
+    rows: reportRows
   };
 
   return exports[viewId] || exports.dashboard;
@@ -744,7 +875,7 @@ function renderCapital() {
     `).join("") : '<div class="muted">لا توجد حركات رأس مال بعد.</div>';
 }
 
-function renderPartners() {
+function renderPartnersLegacy() {
   const term = document.getElementById("partnerSearch")?.value.trim() || "";
   const filtered = partners.filter((partner) => {
     return !term || partner.name.includes(term) || partner.phone.includes(term);
@@ -768,6 +899,52 @@ function renderPartners() {
       <button class="small-btn" data-delete-partner="${partner.id}" type="button">حذف</button>
     </div>
   `).join("") : '<div class="muted">لا توجد بيانات شركاء بعد.</div>';
+}
+
+function renderPartners() {
+  const term = document.getElementById("partnerSearch")?.value.trim() || "";
+  const filtered = partners.filter((partner) => {
+    return !term || partner.name.includes(term) || partner.phone.includes(term);
+  });
+  const totalCapital = partners.reduce((sum, partner) => sum + Number(partner.capital || 0), 0);
+  const totalShare = partners.reduce((sum, partner) => sum + Number(partner.share || 0), 0);
+  const productShares = partners.flatMap((partner) => (partner.productShares || []).map((entry) => ({ partner, entry })));
+
+  document.getElementById("partnerSummary").innerHTML = `
+    <div class="capital-card"><span class="muted">عدد الشركاء</span><strong>${fmt.format(partners.length)}</strong></div>
+    <div class="capital-card"><span class="muted">إجمالي رأس المال</span><strong>${money(totalCapital)}</strong></div>
+    <div class="capital-card"><span class="muted">مجموع النسب العامة</span><strong class="${totalShare > 100 ? "danger-text" : ""}">${fmt.format(totalShare)}%</strong></div>
+  `;
+
+  document.getElementById("partnerList").innerHTML = filtered.length ? filtered.map((partner) => `
+    <div class="entity-row">
+      <div>
+        <strong>${partner.name}</strong>
+        <div class="muted">${partner.phone || "بدون هاتف"} | نسبة عامة ${fmt.format(Number(partner.share || 0))}%</div>
+        <div class="muted">رأس المال ${money(partner.capital)} | ${partner.notes || "لا توجد ملاحظات"}</div>
+      </div>
+      <div class="inline-actions">
+        <input class="mini-input" data-partner-share-input="${partner.id}" type="number" min="0" max="100" step="0.1" value="${Number(partner.share || 0)}" aria-label="نسبة ربح الشريك">
+        <button class="small-btn" data-save-partner-share="${partner.id}" type="button">حفظ النسبة</button>
+        <button class="small-btn danger-btn" data-delete-partner="${partner.id}" type="button">حذف</button>
+      </div>
+    </div>
+  `).join("") : '<div class="muted">لا توجد بيانات شركاء بعد.</div>';
+
+  renderPartnerShareOptions();
+  const shareList = document.getElementById("partnerProductShareList");
+  if (shareList) {
+    shareList.innerHTML = productShares.length ? productShares.map(({ partner, entry }) => `
+      <div class="entity-row">
+        <div>
+          <strong>${partner.name}</strong>
+          <div class="muted">${productName(entry.productId)} | نسبة خاصة ${fmt.format(Number(entry.share || 0))}%</div>
+          <div class="muted">مجموع نسب هذا الصنف: ${fmt.format(totalProductPartnerShare(entry.productId))}%</div>
+        </div>
+        <button class="small-btn danger-btn" data-delete-product-share="${partner.id}:${entry.productId}" type="button">حذف</button>
+      </div>
+    `).join("") : '<div class="muted">لا توجد نسب خاصة بالاصناف بعد. يتم استخدام نسبة الشريك العامة تلقائيا.</div>';
+  }
 }
 
 function renderSettings() {
@@ -878,6 +1055,32 @@ function renderReports() {
     `;
   }).join("") : '<div class="muted">أضف موردين واربطهم بالأصناف لعرض العلاقات.</div>';
 
+  const shareRows = partnerShareRows(selectedPeriod);
+  const shareTotals = Object.values(partnerTotals(selectedPeriod));
+  const periodSalesTotal = salesLog
+    .filter((sale) => isWithinPeriod(sale.date, selectedPeriod))
+    .reduce((sum, sale) => sum + Number(sale.total || 0), 0);
+
+  document.getElementById("partnerProfitSummary").innerHTML = `
+    <div class="capital-card"><span class="muted">إجمالي المبيعات</span><strong>${money(periodSalesTotal)}</strong></div>
+    <div class="capital-card"><span class="muted">عدد حصص الشركاء</span><strong>${fmt.format(shareRows.length)}</strong></div>
+    <div class="capital-card"><span class="muted">إجمالي الحصص</span><strong>${money(shareTotals.reduce((sum, entry) => sum + entry.total, 0))}</strong></div>
+    ${shareTotals.map((entry) => `<div class="capital-card"><span class="muted">${entry.name}</span><strong>${money(entry.total)}</strong></div>`).join("")}
+  `;
+
+  document.getElementById("partnerShareTable").innerHTML = shareRows.length ? shareRows
+    .sort((a, b) => `${b.sale.date} ${b.sale.time}`.localeCompare(`${a.sale.date} ${a.sale.time}`))
+    .map(({ sale, share }) => `
+      <tr>
+        <td>#${sale.id}</td>
+        <td>${sale.date} ${sale.time}</td>
+        <td>${share.partnerName || "شريك محذوف"}</td>
+        <td>${share.productName || productName(share.productId)} | ${money(share.basisProfit)}</td>
+        <td>${fmt.format(Number(share.sharePercent || 0))}%</td>
+        <td>${money(share.amount)}</td>
+      </tr>
+    `).join("") : '<tr><td colspan="6" class="muted">لا توجد حصص شركاء مسجلة في الفترة المحددة.</td></tr>';
+
   document.getElementById("salesLogTable").innerHTML = salesLog.length ? [...salesLog]
     .sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`))
     .slice(0, 10)
@@ -903,6 +1106,7 @@ function renderReports() {
 
 function renderAll() {
   products = products.map((product) => ({ supplierId: "", ...product }));
+  partners = partners.map(normalizePartner);
   renderSupplierOptions();
   renderCustomerOptions();
   renderDashboard();
@@ -928,7 +1132,7 @@ function handleAction(event) {
   if (!(target instanceof Element)) return;
   if (event.type === "touchend") {
     if (target.closest("input, select, textarea, label")) return;
-    if (!target.closest("button, [data-view], [data-view-jump], [data-add-product], [data-remove-line], [data-save-stock], [data-delete-customer], [data-delete-supplier], [data-delete-product], [data-delete-capital], [data-delete-sale], [data-delete-payment], [data-delete-partner]")) return;
+    if (!target.closest("button, [data-view], [data-view-jump], [data-add-product], [data-remove-line], [data-save-stock], [data-delete-customer], [data-delete-supplier], [data-delete-product], [data-delete-capital], [data-delete-sale], [data-delete-payment], [data-delete-partner], [data-save-partner-share], [data-delete-product-share]")) return;
     event.preventDefault();
   }
   const nav = target.closest("[data-view]");
@@ -943,6 +1147,8 @@ function handleAction(event) {
   const deleteSale = target.closest("[data-delete-sale]");
   const deletePayment = target.closest("[data-delete-payment]");
   const deletePartner = target.closest("[data-delete-partner]");
+  const savePartnerShare = target.closest("[data-save-partner-share]");
+  const deleteProductShare = target.closest("[data-delete-product-share]");
 
   if (nav) switchView(nav.dataset.view);
   if (jump) switchView(jump.dataset.viewJump);
@@ -1030,6 +1236,39 @@ function handleAction(event) {
     persistState();
     renderAll();
     showToast("تم حذف الشريك");
+  }
+  if (savePartnerShare) {
+    const partnerId = Number(savePartnerShare.dataset.savePartnerShare);
+    const input = document.querySelector(`[data-partner-share-input="${partnerId}"]`);
+    const partner = partners.find((entry) => Number(entry.id) === partnerId);
+    const share = Number(input?.value || 0);
+    if (!partner || share < 0 || share > 100) {
+      showToast("ادخل نسبة صحيحة بين 0 و 100");
+      return;
+    }
+    if (totalDefaultPartnerShare(partnerId, share) > 100) {
+      showToast("مجموع نسب الشركاء العامة لا يمكن أن يتجاوز 100%");
+      return;
+    }
+    const overSharedProduct = products.find((product) => totalProductShareWithDefault(product.id, partnerId, share) > 100);
+    if (overSharedProduct) {
+      showToast(`تعديل النسبة يجعل مجموع صنف ${overSharedProduct.name} يتجاوز 100%`);
+      return;
+    }
+    partner.share = share;
+    persistState();
+    renderAll();
+    showToast("تم حفظ نسبة الشريك");
+  }
+  if (deleteProductShare) {
+    const [partnerId, productId] = deleteProductShare.dataset.deleteProductShare.split(":").map(Number);
+    const partner = partners.find((entry) => Number(entry.id) === partnerId);
+    if (partner) {
+      partner.productShares = (partner.productShares || []).filter((entry) => Number(entry.productId) !== productId);
+      persistState();
+      renderAll();
+      showToast("تم حذف النسبة الخاصة بالصنف");
+    }
   }
 }
 
@@ -1153,18 +1392,49 @@ document.getElementById("capitalForm").addEventListener("submit", (event) => {
 document.getElementById("partnerForm").addEventListener("submit", (event) => {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
+  const share = Number(form.get("share"));
+  if (share < 0 || share > 100 || totalDefaultPartnerShare() + share > 100) {
+    showToast("مجموع نسب الشركاء العامة لا يمكن أن يتجاوز 100%");
+    return;
+  }
   partners.unshift({
     id: Date.now(),
     name: form.get("name"),
     phone: form.get("phone"),
-    share: Number(form.get("share")),
+    share,
     capital: Number(form.get("capital")),
-    notes: form.get("notes")
+    notes: form.get("notes"),
+    productShares: []
   });
   event.currentTarget.reset();
   persistState();
   renderAll();
   showToast("تم حفظ الشريك");
+});
+
+document.getElementById("partnerProductShareForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const form = new FormData(event.currentTarget);
+  const partnerId = Number(form.get("partnerId"));
+  const productId = Number(form.get("productId"));
+  const share = Number(form.get("share"));
+  const partner = partners.find((entry) => Number(entry.id) === partnerId);
+  if (!partner || !productId || share < 0 || share > 100) {
+    showToast("اختر الشريك والصنف وادخل نسبة صحيحة");
+    return;
+  }
+  if (totalProductPartnerShare(productId, { partnerId, share }) > 100) {
+    showToast("مجموع نسب هذا الصنف لا يمكن أن يتجاوز 100%");
+    return;
+  }
+  partner.productShares = partner.productShares || [];
+  const existing = partner.productShares.find((entry) => Number(entry.productId) === productId);
+  if (existing) existing.share = share;
+  else partner.productShares.push({ productId, share });
+  event.currentTarget.reset();
+  persistState();
+  renderAll();
+  showToast("تم حفظ نسبة الشريك لهذا الصنف");
 });
 
 document.getElementById("settingsForm").addEventListener("submit", (event) => {
@@ -1270,6 +1540,15 @@ document.getElementById("recordSaleBtn").addEventListener("click", () => {
     showToast("اختر عميلاً قبل تسجيل الفاتورة كدين");
     return;
   }
+  const overSharedLine = invoice.find((line) => totalProductPartnerShare(line.product.id) > 100);
+  if (overSharedLine) {
+    showToast(`مجموع نسب الشركاء للصنف ${overSharedLine.product.name} يتجاوز 100%`);
+    return;
+  }
+  const partnerShares = calculatePartnerSharesForInvoice(invoice);
+  const grossProfit = invoice.reduce((sum, line) => {
+    return sum + Math.max(0, (Number(line.product.price || 0) - Number(line.product.cost || 0)) * line.qty);
+  }, 0);
   invoice.forEach((line) => {
     line.product.stock -= line.qty;
     line.product.sold += line.qty;
@@ -1282,8 +1561,17 @@ document.getElementById("recordSaleBtn").addEventListener("click", () => {
     customerId: selectedCustomer?.id || null,
     customerName: selectedCustomer?.name || "عميل نقدي",
     paymentType,
-    items: invoice.map((line) => ({ productId: line.product.id, qty: line.qty })),
-    total
+    items: invoice.map((line) => ({
+      productId: line.product.id,
+      productName: line.product.name,
+      qty: line.qty,
+      price: Number(line.product.price || 0),
+      cost: Number(line.product.cost || 0),
+      profit: Math.max(0, (Number(line.product.price || 0) - Number(line.product.cost || 0)) * line.qty)
+    })),
+    total,
+    grossProfit,
+    partnerShares
   });
   const todaySale = salesHistory.find((sale) => sale.date === TODAY);
   if (todaySale) todaySale.total += total;

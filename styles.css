@@ -602,6 +602,32 @@ th {
   padding: 0 10px;
 }
 
+.inline-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mini-input {
+  width: 92px;
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0 8px;
+  text-align: center;
+}
+
+.danger-btn {
+  color: #9f2439;
+  background: #fff1f3;
+}
+
+.danger-text {
+  color: #b4233c;
+}
+
 .pos-layout {
   display: grid;
   grid-template-columns: 1.1fr 0.8fr;
