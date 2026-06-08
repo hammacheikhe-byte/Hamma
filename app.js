@@ -147,7 +147,7 @@ function persistGithubSync() {
 }
 
 function canCloudSync() {
-  return Boolean(githubSync.autoSync && githubSync.token && githubSync.gistId);
+  return Boolean(githubSync.autoSync && githubSync.token);
 }
 
 function updateGithubStatus(message) {
@@ -970,6 +970,9 @@ function renderSettings() {
   document.getElementById("githubSyncStatus").textContent = githubSync.gistId
     ? `مرتبط بـ Gist: ${githubSync.gistId}${githubSync.autoSync ? " | الحفظ التلقائي مفعل" : " | الحفظ التلقائي متوقف"}${githubSync.lastSyncAt ? ` | آخر مزامنة: ${githubSync.lastSyncAt}` : ""}`
     : "البيانات تحفظ محلياً فقط. احفظ Token ثم اضغط رفع البيانات لإنشاء Gist وحفظها سحابياً.";
+  if (!githubSync.gistId && githubSync.token) {
+    document.getElementById("githubSyncStatus").textContent = "GitHub Token محفوظ. سيتم إنشاء Gist تلقائيا عند أول حفظ أو تعديل.";
+  }
   if (!persistentStorageAvailable()) {
     document.getElementById("githubSyncStatus").textContent = "تنبيه: هذا المتصفح يمنع التخزين المحلي. استخدم GitHub Sync حتى لا تضيع البيانات.";
   }
@@ -1488,6 +1491,7 @@ document.getElementById("githubSyncForm").addEventListener("submit", (event) => 
   githubSync.autoSync = form.get("githubAutoSync") === "on";
   persistGithubSync();
   renderSettings();
+  scheduleCloudSync();
   showToast("تم حفظ إعدادات GitHub");
 });
 
@@ -1519,7 +1523,7 @@ document.getElementById("resetDataBtn").addEventListener("click", () => {
   capitalMovements = [];
   partners = [];
   invoice = [];
-  storageRemove(STORAGE_KEY);
+  persistState();
   renderAll();
   showToast("تم تصفير بيانات التطبيق");
 });
