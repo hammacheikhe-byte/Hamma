@@ -1,4 +1,4 @@
-const TODAY = "2026-06-05";
+let TODAY = currentDateKey();
 const STORAGE_KEY = "daily-pos-state-v2";
 const GITHUB_SYNC_KEY = "daily-pos-github-sync-v1";
 const AUTH_SESSION_KEY = "daily-pos-authenticated";
@@ -7,6 +7,16 @@ const LEGACY_STORAGE_KEYS = ["daily-pos-state-v1"];
 const fmt = new Intl.NumberFormat("ar", { maximumFractionDigits: 0 });
 const money = (value) => `${fmt.format(value)} ${settings?.currency || "أوقية"}`;
 const memoryStore = new Map();
+
+function currentDateKey() {
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+}
+
+function refreshToday() {
+  TODAY = currentDateKey();
+}
 
 function storageGet(key, area = "local") {
   try {
@@ -1108,7 +1118,19 @@ function renderReports() {
 }
 
 function renderAll() {
-  products = products.map((product) => ({ supplierId: "", ...product }));
+  refreshToday();
+  products = products.map((product) => ({
+    supplierId: "",
+    sold: 0,
+    stock: 0,
+    cost: 0,
+    price: 0,
+    ...product,
+    sold: Number(product.sold || 0),
+    stock: Number(product.stock || 0),
+    cost: Number(product.cost || 0),
+    price: Number(product.price || 0)
+  }));
   partners = partners.map(normalizePartner);
   renderSupplierOptions();
   renderCustomerOptions();
@@ -1215,8 +1237,8 @@ function handleAction(event) {
       sale.items.forEach((item) => {
         const product = products.find((entry) => entry.id === item.productId);
         if (product) {
-          product.stock += item.qty;
-          product.sold = Math.max(0, product.sold - item.qty);
+          product.stock = Number(product.stock || 0) + item.qty;
+          product.sold = Math.max(0, Number(product.sold || 0) - item.qty);
         }
       });
       const day = salesHistory.find((entry) => entry.date === sale.date);
@@ -1529,6 +1551,7 @@ document.getElementById("resetDataBtn").addEventListener("click", () => {
 });
 
 document.getElementById("recordSaleBtn").addEventListener("click", () => {
+  refreshToday();
   if (!invoice.length) {
     showToast("أضف صنفاً واحداً على الأقل للفاتورة");
     return;
@@ -1554,8 +1577,8 @@ document.getElementById("recordSaleBtn").addEventListener("click", () => {
     return sum + Math.max(0, (Number(line.product.price || 0) - Number(line.product.cost || 0)) * line.qty);
   }, 0);
   invoice.forEach((line) => {
-    line.product.stock -= line.qty;
-    line.product.sold += line.qty;
+    line.product.stock = Number(line.product.stock || 0) - line.qty;
+    line.product.sold = Number(line.product.sold || 0) + line.qty;
     line.product.updated = TODAY;
   });
   salesLog.unshift({
