@@ -589,22 +589,39 @@ function githubHeaders() {
   return {
     "Accept": "application/vnd.github+json",
     "Authorization": `Bearer ${githubSync.token}`,
+    "Content-Type": "application/json",
     "X-GitHub-Api-Version": "2022-11-28"
   };
 }
 
+function readableGithubError(status, text = "") {
+  const lower = text.toLowerCase();
+  if (status === 401) return "GitHub Token غير صحيح أو منتهي. أنشئ Token جديداً بصلاحية gist.";
+  if (status === 403) return "GitHub رفض الحفظ. تأكد أن Token من النوع classic وفيه صلاحية gist، وأنه لم يتجاوز حدود GitHub.";
+  if (status === 404) return "لم يتم العثور على Gist المحفوظ. اترك Gist ID فارغاً واضغط رفع البيانات لإنشاء واحد جديد.";
+  if (lower.includes("resource not accessible") || lower.includes("fine-grained")) {
+    return "هذا Token لا يملك صلاحية Gist. استخدم Personal access token classic مع صلاحية gist.";
+  }
+  return `GitHub رفض الطلب (${status}). ${text.slice(0, 160)}`;
+}
+
 async function githubRequest(url, options = {}) {
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      ...githubHeaders(),
-      ...(options.headers || {})
-    }
-  });
+  let response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers: {
+        ...githubHeaders(),
+        ...(options.headers || {})
+      }
+    });
+  } catch {
+    throw new Error("تعذر الاتصال بـ GitHub. تحقق من الإنترنت أو افتح التطبيق عبر https وليس file.");
+  }
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`GitHub رفض الطلب (${response.status}). ${text.slice(0, 160)}`);
+    throw new Error(readableGithubError(response.status, text));
   }
 
   return response.json();
@@ -620,15 +637,25 @@ async function pushToGithub(options = {}) {
     }
   };
 
-  const gist = githubSync.gistId
-    ? await githubRequest(`https://api.github.com/gists/${githubSync.gistId}`, {
+  let gist;
+  if (githubSync.gistId) {
+    try {
+      gist = await githubRequest(`https://api.github.com/gists/${githubSync.gistId}`, {
         method: "PATCH",
         body: JSON.stringify(payload)
-      })
-    : await githubRequest("https://api.github.com/gists", {
-        method: "POST",
-        body: JSON.stringify(payload)
       });
+    } catch (error) {
+      if (!String(error.message).includes("لم يتم العثور على Gist")) throw error;
+      githubSync.gistId = "";
+      persistGithubSync();
+    }
+  }
+  if (!gist) {
+    gist = await githubRequest("https://api.github.com/gists", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  }
 
   githubSync.gistId = gist.id;
   githubSync.lastSyncAt = new Date().toLocaleString("ar");
@@ -1511,33 +1538,47 @@ document.getElementById("logoutBtn").addEventListener("click", () => {
   showToast("تم تسجيل الخروج");
 });
 
-document.getElementById("githubSyncForm").addEventListener("submit", (event) => {
+document.getElementById("githubSyncForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
-  githubSync.token = form.get("githubToken").trim();
+  githubSync.token = String(form.get("githubToken") || "").replace(/\s+/g, "");
   githubSync.gistId = form.get("githubGistId").trim();
   githubSync.autoSync = form.get("githubAutoSync") === "on";
   persistGithubSync();
   renderSettings();
-  scheduleCloudSync();
   showToast("تم حفظ إعدادات GitHub");
+  if (githubSync.autoSync && githubSync.token) {
+    try {
+      updateGithubStatus("جاري اختبار الاتصال ورفع البيانات إلى GitHub...");
+      await pushToGithub({ silent: true });
+      updateGithubStatus(`تم الاتصال والحفظ في GitHub | Gist: ${githubSync.gistId}`);
+      showToast("تم ربط الحفظ السحابي بنجاح");
+    } catch (error) {
+      updateGithubStatus(`تعذر الحفظ السحابي: ${error.message}`);
+      showToast(error.message);
+    }
+  }
 });
 
 document.getElementById("pushGithubBtn").addEventListener("click", async () => {
   try {
+    updateGithubStatus("جاري رفع البيانات إلى GitHub...");
     await pushToGithub();
     githubSync.autoSync = true;
     persistGithubSync();
     renderSettings();
   } catch (error) {
+    updateGithubStatus(`تعذر الحفظ السحابي: ${error.message}`);
     showToast(error.message);
   }
 });
 
 document.getElementById("pullGithubBtn").addEventListener("click", async () => {
   try {
+    updateGithubStatus("جاري استيراد البيانات من GitHub...");
     await pullFromGithub();
   } catch (error) {
+    updateGithubStatus(`تعذر الاستيراد السحابي: ${error.message}`);
     showToast(error.message);
   }
 });
