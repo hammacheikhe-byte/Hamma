@@ -103,6 +103,7 @@ document.body.classList.toggle("locked", storageGet(AUTH_SESSION_KEY, "session")
 let cloudSyncTimer = null;
 let suppressCloudSync = false;
 let lastPointerActionAt = 0;
+let autoCloudPullDone = false;
 
 const icons = {
   layout: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>',
@@ -159,6 +160,10 @@ function persistGithubSync() {
 
 function canCloudSync() {
   return Boolean(githubSync.autoSync && githubSync.token);
+}
+
+function canCloudPull() {
+  return Boolean(githubSync.autoSync && githubSync.token && githubSync.gistId);
 }
 
 function updateGithubStatus(message) {
@@ -664,7 +669,7 @@ async function pushToGithub(options = {}) {
   if (!options.silent) showToast("تم رفع البيانات إلى GitHub");
 }
 
-async function pullFromGithub() {
+async function pullFromGithub(options = {}) {
   if (!githubSync.gistId) throw new Error("أدخل Gist ID أو قم برفع البيانات أولاً لإنشاء Gist.");
   const gist = await githubRequest(`https://api.github.com/gists/${githubSync.gistId}`);
   const file = gist.files?.[GITHUB_DATA_FILE];
@@ -675,7 +680,21 @@ async function pullFromGithub() {
   githubSync.lastSyncAt = new Date().toLocaleString("ar");
   persistGithubSync();
   renderSettings();
-  showToast("تم استيراد البيانات من GitHub");
+  if (!options.silent) showToast("تم استيراد البيانات من GitHub");
+}
+
+async function autoPullLatestFromGithub(source = "startup") {
+  if (!canCloudPull() || autoCloudPullDone) return;
+  autoCloudPullDone = true;
+  try {
+    updateGithubStatus("جاري جلب آخر نسخة محفوظة من GitHub...");
+    await pullFromGithub({ silent: true });
+    updateGithubStatus(`تم جلب آخر نسخة من GitHub | آخر مزامنة: ${githubSync.lastSyncAt}`);
+  } catch (error) {
+    autoCloudPullDone = false;
+    updateGithubStatus(`تعذر جلب آخر نسخة من GitHub: ${error.message}`);
+    if (source === "login") showToast(error.message);
+  }
 }
 
 function productStatus(product) {
@@ -1513,7 +1532,7 @@ document.getElementById("settingsForm").addEventListener("submit", (event) => {
   showToast("تم حفظ الإعدادات");
 });
 
-document.getElementById("loginForm").addEventListener("submit", (event) => {
+document.getElementById("loginForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
   const username = String(form.get("username") || "").trim();
@@ -1526,6 +1545,7 @@ document.getElementById("loginForm").addEventListener("submit", (event) => {
     event.currentTarget.reset();
     loginError.textContent = "";
     renderAll();
+    await autoPullLatestFromGithub("login");
     return;
   }
 
@@ -1549,9 +1569,16 @@ document.getElementById("githubSyncForm").addEventListener("submit", async (even
   showToast("تم حفظ إعدادات GitHub");
   if (githubSync.autoSync && githubSync.token) {
     try {
-      updateGithubStatus("جاري اختبار الاتصال ورفع البيانات إلى GitHub...");
-      await pushToGithub({ silent: true });
-      updateGithubStatus(`تم الاتصال والحفظ في GitHub | Gist: ${githubSync.gistId}`);
+      if (githubSync.gistId) {
+        updateGithubStatus("جاري جلب آخر نسخة محفوظة من GitHub...");
+        await pullFromGithub({ silent: true });
+        autoCloudPullDone = true;
+        updateGithubStatus(`تم جلب آخر نسخة من GitHub | Gist: ${githubSync.gistId}`);
+      } else {
+        updateGithubStatus("جاري إنشاء Gist ورفع البيانات إلى GitHub...");
+        await pushToGithub({ silent: true });
+        updateGithubStatus(`تم الاتصال والحفظ في GitHub | Gist: ${githubSync.gistId}`);
+      }
       showToast("تم ربط الحفظ السحابي بنجاح");
     } catch (error) {
       updateGithubStatus(`تعذر الحفظ السحابي: ${error.message}`);
@@ -1669,3 +1696,6 @@ document.getElementById("globalSearch").addEventListener("keydown", (event) => {
 
 initIcons();
 renderAll();
+if (storageGet(AUTH_SESSION_KEY, "session") === "true") {
+  autoPullLatestFromGithub("startup");
+}

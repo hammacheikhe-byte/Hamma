@@ -1,9 +1,9 @@
-const CACHE_NAME = "hamma-busness-v5";
+const CACHE_NAME = "hamma-busness-v6";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=20260613-sync",
-  "./app.js?v=20260613-sync",
+  "./styles.css?v=20260613-auto-pull",
+  "./app.js?v=20260613-auto-pull",
   "./manifest.webmanifest",
   "./icon.svg"
 ];
