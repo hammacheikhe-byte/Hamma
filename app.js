@@ -102,6 +102,7 @@ let invoice = [];
 document.body.classList.toggle("locked", storageGet(AUTH_SESSION_KEY, "session") !== "true");
 let cloudSyncTimer = null;
 let suppressCloudSync = false;
+let lastPointerActionAt = 0;
 
 const icons = {
   layout: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>',
@@ -1155,10 +1156,13 @@ function switchView(viewId) {
 function handleAction(event) {
   const target = event.target;
   if (!(target instanceof Element)) return;
-  if (event.type === "touchend") {
+  if (event.type === "click" && Date.now() - lastPointerActionAt < 450) return;
+  if (event.type === "pointerup") {
+    if (event.pointerType === "mouse") return;
     if (target.closest("input, select, textarea, label")) return;
     if (!target.closest("button, [data-view], [data-view-jump], [data-add-product], [data-remove-line], [data-save-stock], [data-delete-customer], [data-delete-supplier], [data-delete-product], [data-delete-capital], [data-delete-sale], [data-delete-payment], [data-delete-partner], [data-save-partner-share], [data-delete-product-share]")) return;
     event.preventDefault();
+    lastPointerActionAt = Date.now();
   }
   const nav = target.closest("[data-view]");
   const jump = target.closest("[data-view-jump]");
@@ -1298,7 +1302,9 @@ function handleAction(event) {
 }
 
 document.addEventListener("click", handleAction);
-document.addEventListener("touchend", handleAction, { passive: false });
+if (window.PointerEvent) {
+  document.addEventListener("pointerup", handleAction, { passive: false });
+}
 
 document.addEventListener("input", (event) => {
   if (event.target.matches("#inventorySearch, #typeFilter, #dateFilter, #makerFilter")) renderInventory();
