@@ -1205,8 +1205,8 @@ function handleAction(event) {
   if (event.type === "click" && Date.now() - lastPointerActionAt < 450) return;
   if (event.type === "pointerup") {
     if (event.pointerType === "mouse") return;
-    if (target.closest("input, select, textarea, label")) return;
-    if (!target.closest("button, [data-view], [data-view-jump], [data-add-product], [data-remove-line], [data-save-stock], [data-delete-customer], [data-delete-supplier], [data-delete-product], [data-delete-capital], [data-delete-sale], [data-delete-payment], [data-delete-partner], [data-save-partner-share], [data-delete-product-share]")) return;
+    if (!target.closest("[data-toggle-secret]") && target.closest("input, select, textarea, label")) return;
+    if (!target.closest("button, [data-view], [data-view-jump], [data-add-product], [data-remove-line], [data-save-stock], [data-delete-customer], [data-delete-supplier], [data-delete-product], [data-delete-capital], [data-delete-sale], [data-delete-payment], [data-delete-partner], [data-save-partner-share], [data-delete-product-share], [data-toggle-secret]")) return;
     event.preventDefault();
     lastPointerActionAt = Date.now();
   }
@@ -1224,9 +1224,19 @@ function handleAction(event) {
   const deletePartner = target.closest("[data-delete-partner]");
   const savePartnerShare = target.closest("[data-save-partner-share]");
   const deleteProductShare = target.closest("[data-delete-product-share]");
+  const toggleSecret = target.closest("[data-toggle-secret]");
 
   if (nav) switchView(nav.dataset.view);
   if (jump) switchView(jump.dataset.viewJump);
+  if (toggleSecret) {
+    const input = document.getElementById(toggleSecret.dataset.toggleSecret);
+    if (input) {
+      const visible = input.type === "text";
+      input.type = visible ? "password" : "text";
+      toggleSecret.textContent = visible ? "إظهار" : "إخفاء";
+      input.focus();
+    }
+  }
   if (add) {
     const product = products.find((item) => item.id === Number(add.dataset.addProduct));
     const line = invoice.find((item) => item.product.id === product.id);

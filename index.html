@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-title" content="Hamma Busness" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <title>نظام المبيعات والمخزون</title>
-    <link rel="stylesheet" href="./styles.css?v=20260613-auto-pull" />
+    <link rel="stylesheet" href="./styles.css?v=20260613-token" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./icon.svg" />
@@ -829,7 +829,10 @@
               <form id="githubSyncForm" class="stack-form">
                 <label>
                   GitHub Token
-                  <input name="githubToken" type="password" autocomplete="off" placeholder="Personal access token classic بصلاحية gist" />
+                  <div class="secret-field">
+                    <input name="githubToken" id="githubTokenInput" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Personal access token classic بصلاحية gist" />
+                    <button class="small-btn" data-toggle-secret="githubTokenInput" type="button">إظهار</button>
+                  </div>
                 </label>
                 <label>
                   Gist ID
@@ -856,7 +859,7 @@
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="./app.js?v=20260613-auto-pull"></script>
+    <script src="./app.js?v=20260613-token"></script>
     <script>
       if ("serviceWorker" in navigator && location.protocol !== "file:") {
         window.addEventListener("load", () => {

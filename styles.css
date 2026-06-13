@@ -724,6 +724,26 @@ th {
   color: var(--ink);
 }
 
+.secret-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.secret-field input {
+  width: 100%;
+  min-width: 0;
+  direction: ltr;
+  text-align: left;
+}
+
+.secret-field .small-btn {
+  min-height: 44px;
+  padding-inline: 14px;
+  white-space: nowrap;
+}
+
 .stack-form .check-row {
   display: flex;
   align-items: center;
@@ -916,9 +936,14 @@ th {
 
   .top-actions,
   .search-field,
+  .secret-field,
   .primary-action,
   .ghost-action {
     width: 100%;
+  }
+
+  .secret-field {
+    grid-template-columns: 1fr;
   }
 
   .metric-grid,
